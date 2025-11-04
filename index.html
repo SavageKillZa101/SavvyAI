@@ -25,7 +25,7 @@
 
 <script>
   // ==== CONFIG ==== 
-  const MODE = "ollama";   // "ollama" or "webllm"
+  const MODE = "ollama";   // Change to "webllm" for browser-only (no install)
 
   // Ollama (change only if you run on non-standard port)
   const OLLAMA_URL = "http://localhost:11434/api/chat";
@@ -43,12 +43,16 @@
 
   async function initWebLLM() {
     status.textContent = "Downloading model (~400 MB)...";
-    const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3");
-    webllmEngine = await pipeline("text-generation", WEBLLM_MODEL, {
-      dtype: "q4f16",
-      device: "webgpu" in navigator ? "webgpu" : "wasm"
-    });
-    status.textContent = "Model ready (browser)";
+    try {
+      const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.0/+esm");
+      webllmEngine = await pipeline('text-generation', WEBLLM_MODEL, { 
+        quantized: true,
+        dtype: 'q4f16'
+      });
+      status.textContent = "Model ready (browser mode)";
+    } catch (e) {
+      status.textContent = "Browser mode error: " + e.message + " (Try Chrome/Edge)";
+    }
   }
 
   function addMsg(role, text) {
@@ -73,28 +77,34 @@
           method: "POST",
           headers: {"Content-Type":"application/json"},
           body: JSON.stringify({
-            model: "llama3.2:1b-instruct-q4_0",  // change if you pulled another
+            model: "phi3:mini-4k-instruct-q4",  // Tiny & fast – swap as needed
             messages: [{role:"user", content:prompt}],
-            stream: false
+            stream: false,
+            options: { temperature: 0.7 }
           })
         });
+        if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
         const data = await res.json();
         reply = data.message.content;
       } else {
         if (!webllmEngine) await initWebLLM();
-        const out = await webllmEngine(prompt, { max_new_tokens: 256 });
+        if (!webllmEngine) throw new Error("Model failed to load");
+        const out = await webllmEngine(prompt, { max_new_tokens: 256, temperature: 0.7 });
         reply = out[0].generated_text.replace(prompt, "").trim();
       }
     } catch(e) {
-      reply = "Error: " + e.message;
+      reply = "Error: " + e.message + "\n\nTip: For Ollama, run 'ollama serve' in terminal.\nFor browser, switch MODE='webllm' and retry.";
     }
 
     addMsg("ai", reply);
     status.textContent = MODE==="ollama"?"Ollama ready":"Browser ready";
   }
 
-  // Auto-init WebLLM on first click if needed
-  if (MODE!=="ollama") status.textContent = "Click Send to load model";
+  // Enter key to send
+  input.addEventListener("keydown", (e) => { if (e.key==="Enter" && e.ctrlKey) send(); });
+
+  // Auto-init message
+  if (MODE!=="ollama") status.textContent = "Click Send to load browser model (first time only)";
 </script>
 </body>
 </html>
