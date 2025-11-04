@@ -182,10 +182,11 @@
     <div id="output"></div>
   </div>
 
-  <!-- Transformers.js + pre-converted model -->
+  <!-- Transformers.js + compatible model -->
   <script src="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0"></script>
   <script>
-    const modelUrl = "https://huggingface.co/roneneldan/TinyStories-1M/resolve/main/transformers_js/model.onnx";
+    // Fixed: Use a Transformers.js-compatible model (DistilGPT-2, ~82M params)
+    const modelId = "Xenova/distilgpt2";
 
     let generator = null;
     const btn = document.getElementById('generate');
@@ -204,13 +205,14 @@
 
       if (!generator) {
         try {
-          generator = await window.transformers.pipeline('text-generation', modelUrl, {
-            dtype: 'q4',          // 4-bit quantized → ~8 MB
-            device: 'wasm'        // runs on CPU via WebAssembly
+          // Load directly from model ID—no manual ONNX URL needed
+          generator = await pipeline('text-generation', modelId, {
+            dtype: 'q4',          // 4-bit quantized for low RAM
+            device: 'wasm'        // CPU via WebAssembly
           });
         } catch (e) {
-          out.textContent = 'Error: Failed to load shadows. Check connection.';
-          console.error(e);
+          out.textContent = 'Error: Shadows evade capture. Verify internet for initial load.';
+          console.error('Load error:', e);
           btn.disabled = false;
           btn.textContent = 'Initiate Sequence';
           title.classList.remove('loading');
@@ -219,14 +221,20 @@
       }
 
       out.textContent = 'Decrypting response...';
-      const result = await generator(prompt, {
-        max_new_tokens: 100,
-        do_sample: true,
-        top_p: 0.95,
-        temperature: 0.8,
-      });
+      try {
+        const result = await generator(prompt, {
+          max_new_tokens: 100,
+          do_sample: true,
+          top_p: 0.95,
+          temperature: 0.8,
+        });
 
-      out.textContent = result[0].generated_text;
+        out.textContent = result[0].generated_text;
+      } catch (e) {
+        out.textContent = 'Error: Generation failed. Shadows too elusive.';
+        console.error('Generation error:', e);
+      }
+
       btn.disabled = false;
       btn.textContent = 'Initiate Sequence';
       title.classList.remove('loading');
