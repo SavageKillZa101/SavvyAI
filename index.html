@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Local Tiny AI (no server)</title>
+  <style>
+    body {font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 1rem;}
+    textarea {width:100%; height:120px; font-family: monospace;}
+    button {margin-top: .5rem; padding: .5rem 1rem;}
+    #output {margin-top: 1rem; white-space: pre-wrap; background:#f8f8f8; padding:1rem;}
+  </style>
+</head>
+<body>
+  <h1>Tiny Unrestricted AI (runs in your browser)</h1>
+  <p>Paste a prompt and click <b>Generate</b>. Works on any laptop with a modern browser.</p>
+
+  <textarea id="prompt" placeholder="Once upon a time...">Once upon a time</textarea><br>
+  <button id="generate">Generate</button>
+
+  <div id="output"></div>
+
+  <!-- Transformers.js + pre-converted model -->
+  <script src="https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0"></script>
+  <script>
+    const modelUrl = "https://huggingface.co/roneneldan/TinyStories-1M/resolve/main/transformers_js/model.onnx";
+
+    let generator = null;
+    document.getElementById('generate').addEventListener('click', async () => {
+      const btn = document.getElementById('generate');
+      const out = document.getElementById('output');
+      const prompt = document.getElementById('prompt').value.trim();
+      if (!prompt) return;
+
+      btn.disabled = true;
+      out.textContent = 'Loading model (first time only)...';
+
+      if (!generator) {
+        generator = await window.transformers.pipeline('text-generation', modelUrl, {
+          dtype: 'q4',          // 4-bit quantized → ~8 MB
+          device: 'wasm'        // runs on CPU via WebAssembly
+        });
+      }
+
+      out.textContent = 'Generating...';
+      const result = await generator(prompt, {
+        max_new_tokens: 100,
+        do_sample: true,
+        top_p: 0.95,
+        temperature: 0.8,
+      });
+
+      out.textContent = result[0].generated_text;
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>
